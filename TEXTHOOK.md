@@ -88,8 +88,9 @@ listens on 6677.
 
 ## Other engines with this contract
 
-- BGI Player 0.1.7 (`engine: "bgi"`, texthook.rs in the ethornell patch) and
-  KiriKiri Player 0.3.12 (`engine: "kirikiri"`, texthook.tjs + kp-texthook),
+- BGI Player 0.1.8 (`engine: "bgi"`, texthook.rs in the ethornell patch) and
+  KiriKiri Player 0.3.13 (`engine: "kirikiri"`, krkrsdl2 and krkrsdl3; texthook.tjs + kp-texthook),
+  both with `name` events,
   in ~/Cowork/Code/VN-Ports; see their notes.md. VN Library sets
   VNLIB_TEXTHOOK=1 for every launch while its Text hook switch is on.
 
