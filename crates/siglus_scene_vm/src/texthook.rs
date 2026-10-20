@@ -296,21 +296,29 @@ mod server {
         let (tx, rx) = channel::<(Option<String>, Option<String>)>();
         let _ = TX.set(Mutex::new(tx));
 
-        let accept_clients = clients.clone();
-        let _ = std::thread::Builder::new()
-            .name("texthook-accept".into())
-            .spawn(move || {
-                for stream in listener.incoming().flatten() {
-                    let clients = accept_clients.clone();
-                    let _ = std::thread::Builder::new()
-                        .name("texthook-handshake".into())
-                        .spawn(move || {
-                            if let Some(c) = handshake(stream) {
-                                clients.lock().unwrap_or_else(|e| e.into_inner()).push(c);
-                            }
-                        });
-                }
-            });
+        // "localhost" resolves to ::1 first, and texthooker pages default to
+        // ws://localhost:6677, so listen there too when IPv6 is available.
+        let mut listeners = vec![listener];
+        if let Ok(v6) = TcpListener::bind(("::1", port)) {
+            listeners.push(v6);
+        }
+        for listener in listeners {
+            let accept_clients = clients.clone();
+            let _ = std::thread::Builder::new()
+                .name("texthook-accept".into())
+                .spawn(move || {
+                    for stream in listener.incoming().flatten() {
+                        let clients = accept_clients.clone();
+                        let _ = std::thread::Builder::new()
+                            .name("texthook-handshake".into())
+                            .spawn(move || {
+                                if let Some(c) = handshake(stream) {
+                                    clients.lock().unwrap_or_else(|e| e.into_inner()).push(c);
+                                }
+                            });
+                    }
+                });
+        }
 
         let _ = std::thread::Builder::new()
             .name("texthook-send".into())
