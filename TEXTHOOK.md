@@ -86,7 +86,14 @@ The result was 101 lines and 1 choice (4 options), with no duplicates. The
 text and glyph positions match a screenshot. With the variable unset, nothing
 listens on 6677.
 
+## Other engines with this contract
+
+- BGI Player 0.1.7 (`engine: "bgi"`, texthook.rs in the ethornell patch) and
+  KiriKiri Player 0.3.12 (`engine: "kirikiri"`, texthook.tjs + kp-texthook),
+  in ~/Cowork/Code/VN-Ports; see their notes.md. VN Library sets
+  VNLIB_TEXTHOOK=1 for every launch while its Text hook switch is on.
+
 ## Ideas / next
 
 - Real advance widths per glyph; choice rects from SELBTN layout.
-- Same contract in VN-Ports KiriKiri/BGI players; VN Library Text panel.
+- VN Library Text panel.
