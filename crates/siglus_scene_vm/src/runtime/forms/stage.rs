@@ -14960,6 +14960,10 @@ fn dispatch_mwnd_item_op(
         MwndOpKind::Sel | MwndOpKind::SelCancel | MwndOpKind::SelMsg | MwndOpKind::SelMsgCancel => {
             ctx.request_read_flag_no_for_mwnd(form_id, stage_idx, mwnd_idx);
             let choices = parse_mwnd_selection_args(script_args, rhs);
+            if crate::texthook::enabled() {
+                let items: Vec<String> = choices.iter().map(|c| c.text.clone()).collect();
+                crate::texthook::choices((ctx.screen_w, ctx.screen_h), &items, &[]);
+            }
             let cancel_enable = matches!(k, MwndOpKind::SelCancel | MwndOpKind::SelMsgCancel);
             let close_mwnd = matches!(k, MwndOpKind::Sel | MwndOpKind::SelCancel);
 

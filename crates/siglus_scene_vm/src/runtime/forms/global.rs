@@ -1065,6 +1065,16 @@ fn dispatch_selbtn_command(ctx: &mut CommandContext, form_id: u32, args: &[Value
     }
 
     if start_now {
+        if crate::texthook::enabled() {
+            let items: Vec<String> = ctx
+                .globals
+                .selbtn
+                .choices
+                .iter()
+                .map(|c| c.text.clone())
+                .collect();
+            crate::texthook::choices((ctx.screen_w, ctx.screen_h), &items, &[]);
+        }
         let stage_form_id = normal_stage_form_id(ctx);
         let read_flag_scene_no = ctx.current_scene_no.unwrap_or(-1);
         let template_no = ctx.globals.selbtn.template_no.max(0) as usize;

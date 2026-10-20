@@ -1493,6 +1493,72 @@ impl UiRuntime {
     }
 
     /// Ensure fixed UI sprites exist and are laid out for the given screen size.
+    /// VNLIB_TEXTHOOK: report what this message window shows (with glyph
+    /// rectangles in game-screen pixels) once per frame; texthook decides
+    /// when a line is complete.
+    fn texthook_frame(&self, key: (u32, i64, usize), w: u32, h: u32) {
+        use crate::texthook::Rect;
+        let to_rect = |r: UiRect| Rect {
+            x: r.x,
+            y: r.y,
+            w: r.w as i32,
+            h: r.h as i32,
+        };
+        let active = self.mwnd.projection_active || self.mwnd.anim.visible;
+        let (mx, my, _, _) = self.msg_rect(w, h);
+        let slide = self.current_slide_offset_px();
+        let glyphs: Vec<(char, Rect)> = if !active {
+            Vec::new()
+        } else if self.mwnd.msg.glyphs.is_empty() {
+            // Fallback projection without per-character records.
+            self.mwnd
+                .msg
+                .text
+                .as_deref()
+                .unwrap_or("")
+                .chars()
+                .filter(|c| *c != '\n' && *c != '\u{0007}')
+                .map(|c| (c, Rect { x: 0, y: 0, w: 0, h: 0 }))
+                .collect()
+        } else {
+            self.mwnd
+                .msg
+                .glyphs
+                .iter()
+                .filter(|g| !g.ruby && g.moji_type == 0 && g.ch != '\0')
+                .map(|g| {
+                    let size = g.size.max(1);
+                    (
+                        g.ch,
+                        Rect {
+                            x: mx + g.x + slide,
+                            y: my + g.y,
+                            w: size,
+                            h: size,
+                        },
+                    )
+                })
+                .collect()
+        };
+        let name = self.mwnd.name.text.as_deref();
+        let name_rect = name.map(|_| {
+            let (x, y, nw, nh) = self.name_layout(w, h).0;
+            to_rect(UiRect::new(x, y, nw, nh))
+        });
+        // MWND key_icon_appear: set at the PP/R/PAGE key wait, cleared by the
+        // next PRINT. The text is complete then, even while it still reveals.
+        let complete = self.mwnd.key_icon.appear;
+        crate::texthook::message_frame(
+            key,
+            (w, h),
+            to_rect(self.window_rect(w, h)),
+            name,
+            name_rect,
+            &glyphs,
+            complete,
+        );
+    }
+
     pub fn sync_layout(&mut self, layers: &mut crate::layer::LayerManager, w: u32, h: u32) {
         if !self.mwnd.projection_active && !self.mwnd.anim.visible {
             return;
@@ -1822,6 +1888,17 @@ impl UiRuntime {
     ) {
         self.tick_mwnd_only(layers, images, project_dir, w, h, script, syscom);
         self.tick_additional_mwnds(layers, images, project_dir, w, h, script, syscom);
+        if crate::texthook::enabled() {
+            if let Some(key) = self.primary_mwnd_key {
+                self.texthook_frame(key, w, h);
+            }
+            // An instance keyed like the primary window is a stale copy.
+            for (key, child) in &self.mwnd_instances {
+                if Some(*key) != self.primary_mwnd_key {
+                    child.texthook_frame(*key, w, h);
+                }
+            }
+        }
         self.sync_sys_overlay(layers, images, w, h);
         self.sync_msg_back_ui(layers, images, project_dir);
         self.sync_editbox_overlay(layers, images, editbox_lists, focused_editbox);
