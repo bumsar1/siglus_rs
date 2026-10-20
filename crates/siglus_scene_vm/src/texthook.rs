@@ -6,8 +6,9 @@
 //! (`VNLIB_TEXTHOOK_PORT` overrides the port):
 //! - any path except `/json`: one plain-text message per completed line
 //!   (the Textractor WebSocket extension format);
-//! - `/json`: one JSON object per event, `{"kind":"name"|"line"|"choice", ...}`
-//!   with window and glyph rectangles in game-screen pixels.
+//! - `/json`: one JSON object per event, `{"kind":"name"|"line"|"choice"|
+//!   "clear"|"view", ...}` with window and glyph rectangles in game-screen
+//!   pixels and `view`, the game image's rectangle in screen points.
 //!
 //! When the variable is unset, `enabled()` is a cached `false` and nothing
 //! else in this module runs.
@@ -70,6 +71,12 @@ pub fn message_frame(
     let cur: Vec<char> = glyphs.iter().map(|(c, _)| *c).collect();
     if !cur.starts_with(&st.sent) {
         // Window cleared or replaced: the next completed text is a new line.
+        if !st.sent.is_empty() {
+            // Tells overlays that the text they placed is gone.
+            let mut j = json_head("clear", "", screen);
+            j.push('}');
+            emit("clear", None, j);
+        }
         st.sent.clear();
         st.last_name = None;
     }
@@ -105,7 +112,7 @@ pub fn message_frame(
             push_rect(&mut j, r);
         }
         j.push('}');
-        server::send(None, Some(j));
+        emit("name", None, j);
     }
     st.last_name = name.map(str::to_string);
 
@@ -133,7 +140,7 @@ pub fn message_frame(
         j.push_str(&format!("{},\"y\":{},\"w\":{},\"h\":{}}}", r.x, r.y, r.w, r.h));
     }
     j.push_str("]}");
-    server::send(Some(text.to_string()), Some(j));
+    emit("line", Some(text.to_string()), j);
 }
 
 /// A selection (choice) menu was opened. `rects` may be empty.
@@ -163,7 +170,51 @@ pub fn choices(screen: (u32, u32), items: &[String], rects: &[Rect]) {
         j.push('}');
     }
     j.push_str("]}");
-    server::send(Some(plain), Some(j));
+    emit("choice", Some(plain), j);
+}
+
+/// JSON events for the text on screen now, replayed to a JSON client that
+/// connects later (e.g. an overlay started mid-line).
+static SHOWN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+fn emit(kind: &str, plain: Option<String>, json: String) {
+    {
+        let mut shown = SHOWN.lock().unwrap_or_else(|e| e.into_inner());
+        match kind {
+            "clear" => shown.clear(),
+            "view" => {}
+            _ => {
+                if shown.len() >= 16 {
+                    shown.remove(0);
+                }
+                shown.push(json.clone());
+            }
+        }
+    }
+    server::send(plain, Some(json));
+}
+
+fn shown_now() -> Vec<String> {
+    SHOWN.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+static VIEW: Mutex<Option<[f64; 4]>> = Mutex::new(None);
+
+/// Where the game image is on screen: global top-left points (macOS / CG
+/// coordinates), letterbox excluded. A change is sent as a `view` event and
+/// every later event carries it, so overlays can map game pixels to the screen.
+pub fn set_view(screen: (u32, u32), x: f64, y: f64, w: f64, h: f64) {
+    let v = [x, y, w, h].map(|n| (n * 100.0).round() / 100.0);
+    {
+        let mut cur = VIEW.lock().unwrap_or_else(|e| e.into_inner());
+        if *cur == Some(v) {
+            return;
+        }
+        *cur = Some(v);
+    }
+    let mut j = json_head("view", "", screen);
+    j.push('}');
+    emit("view", None, j);
 }
 
 fn json_head(kind: &str, text: &str, screen: (u32, u32)) -> String {
@@ -181,6 +232,11 @@ fn json_head(kind: &str, text: &str, screen: (u32, u32)) -> String {
             .map(|d| d.as_millis())
             .unwrap_or(0)
     ));
+    if let Some([x, y, w, h]) = *VIEW.lock().unwrap_or_else(|e| e.into_inner()) {
+        j.push_str(&format!(
+            ",\"view\":{{\"x\":{x},\"y\":{y},\"w\":{w},\"h\":{h}}}"
+        ));
+    }
     j
 }
 
@@ -315,6 +371,11 @@ mod server {
                     let mut b = [0u8; 512];
                     while matches!(reader.read(&mut b), Ok(n) if n > 0) {}
                 });
+        }
+        if json {
+            for m in super::shown_now() {
+                stream.write_all(&text_frame(&m)).ok()?;
+            }
         }
         Some(Client { stream, json })
     }

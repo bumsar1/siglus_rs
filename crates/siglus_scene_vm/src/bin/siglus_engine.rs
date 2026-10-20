@@ -3095,6 +3095,27 @@ impl App {
     }
 
     fn redraw(&mut self) -> Result<()> {
+        if siglus_scene_vm::texthook::enabled()
+            && let Some(w) = self.window
+            && let Ok(outer) = w.outer_position()
+        {
+            let scale = w.scale_factor().max(f64::EPSILON);
+            let surface = w.surface_size();
+            let inset = w.surface_position();
+            let (vx, vy, vw, vh) = Self::aspect_fit_viewport(
+                surface.width,
+                surface.height,
+                self.game_size.0,
+                self.game_size.1,
+            );
+            siglus_scene_vm::texthook::set_view(
+                self.game_size,
+                (outer.x + inset.x + vx as i32) as f64 / scale,
+                (outer.y + inset.y + vy as i32) as f64 / scale,
+                vw as f64 / scale,
+                vh as f64 / scale,
+            );
+        }
         if let Some(size) = self.pending_surface_size.take()
             && let Some(renderer) = self.renderer.as_ref()
         {

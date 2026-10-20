@@ -31,7 +31,13 @@ there is no DLL hooking and no OCR.
  "choices":[{"text":"鏡子さん","rect":null}, …]}
 ```
 
-- `kind`: `name` (sent before a line whose window shows a speaker), `line`, or `choice`.
+- `kind`: `name` (sent before a line whose window shows a speaker), `line`, `choice`,
+  `clear` (the window's text is gone) or `view` (the game image moved or was resized).
+- `view` on every event once known: the game image on screen in **global
+  top-left points** (macOS/CG coordinates, letterbox and title bar excluded).
+  Screen point = `view.x + x * view.w / screen.w` (same for y). Meikipop uses this.
+- A JSON client that connects gets the events for the text shown right now
+  (since the last `clear`) first, so an overlay started mid-line works at once.
 - All rectangles are in **game-screen pixels** (`screen` = the VM resolution,
   for example 1920x1080). The window is letterboxed, so an overlay must map these
   into the window's content area itself. `glyph_rects` has one entry per
@@ -66,6 +72,8 @@ second window (a back-stage copy during a wipe) shows the same text within
   re-sent every line each frame.
 - `src/runtime/forms/stage.rs`: MWND `SEL*` sends `choice`.
 - `src/runtime/forms/global.rs`: `SELBTN` start sends `choice`. Summer Pockets uses this path.
+- `src/bin/siglus_engine.rs`: `redraw()` reports the view rectangle (outer
+  position + surface inset + aspect-fit viewport, divided by the scale factor).
 
 Branch `vnlib-texthook` in the private repo github.com/bumsar1/siglus_rs
 (`upstream` = xmoezzz/siglus_rs; VN Library merges upstream/main into it on update).
@@ -80,7 +88,5 @@ listens on 6677.
 
 ## Ideas / next
 
-- Window→screen mapping (letterbox offset/scale, macOS window frame in points)
-  so Meikipop doesn't need its own; pump_host knows it.
 - Real advance widths per glyph; choice rects from SELBTN layout.
 - Same contract in VN-Ports KiriKiri/BGI players; VN Library Text panel.
