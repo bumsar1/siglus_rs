@@ -224,9 +224,10 @@ fn json_head(kind: &str, text: &str, screen: (u32, u32)) -> String {
     j.push_str("\",\"text\":");
     push_str(&mut j, text);
     j.push_str(&format!(
-        ",\"screen\":{{\"w\":{},\"h\":{}}},\"time_ms\":{}",
+        ",\"screen\":{{\"w\":{},\"h\":{}}},\"pid\":{},\"time_ms\":{}",
         screen.0,
         screen.1,
+        std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis())
